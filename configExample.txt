@@ -1,0 +1,46 @@
+RUNNING = TRUE #if false, abort on error. if true, ignore and attempt to continue
+
+ADDSSSCRIPTLOCATION = /home/mwalter/hh/scripts/addss.pl #location of ssscript file
+
+UNIPROTDATABASELOCATION=/home/mwalter/project/v0.0.02/projectfiles/databases/uniprotHMMs #location of UNIPROT DB folder
+PDB70DATABASELOCATION=/home/mwalter/project/v0.0.02/projectfiles/databases/pdb70HMMs #location of PDB70 DB folder
+
+UNIPROTDATABASENAME = uniprot20_2016_02 #name of UNIPROT DB file
+PDB70DATABASENAME= pdb70 #name of PDB70 DB file
+
+PICKLELOCATION=/home/mwalter/project/v0.0.02/projectfiles/pickle.pickle #location of startscript pickle file
+
+
+QUERY1NAME = query1.fa #for now unsafe to modify, need to also modify HHR1OUTPUTLOCATION
+
+
+NUMBERITERATIONSUNIPROT = 1 #number of hhsearch iterations against the UNIPROT DB
+NUMBERITERATIONSPDB = 1 #number of hhsearch iterations against the PDB70 DB
+
+#HHR1OUTPUTLOCATION = "%s/%s.hhr" #contains QUERY1NAME and jobFolder, DO NOT MODIFY/UNCOMMENT
+
+S2CLOCATION = /home/mwalter/project/v0.0.02/projectfiles/databases/s2c #location of S2C DB: currently unused
+
+
+
+LOOKUPDATABASELOCATION = /home/mwalter/project/v0.0.02/projectfiles/databases/lookuptable # location of the folder with the lookup table created by startscript.py
+
+PDBSEQRESFILE = /home/mwalter/project/v0.0.02/projectfiles/databases/PDBallFASTA/pdb_seqres.txt # location of PDB all sequences fasta file
+
+
+HHRUNIPROTEVALUE = 0.0001 ##both the -e -E options in the HHsearch against UNIPROT, E-value cutoff
+
+
+#HHRPDBMINSID = 5 #-qid, dont use for now
+HHRPDBMINCOVERAGE = 5 # the -cov option in the HHsearch against pdb70, min coverage
+HHRPDBMAXID = 100 #the -id option in the HHsearch against pdb70, max SID cutoff (for less redundancy)
+HHRPDBEVALUE = 1 #both the -e -E options in the HHsearch against pdb70, E-value cutoff
+
+
+HHRPDBPVALUE = 40 #min P-value cutoff for the HHsearch against PDB70
+
+MINIMUMALIGNMENTLENGTH = 1 #min number of residues in alignment. must be >0 or results include start = stop residues
+
+
+
+

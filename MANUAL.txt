@@ -1,0 +1,77 @@
+This project aims to develop and benchmark an automated pipeline that takes as input sequences of potentially binding proteins and produces as output template predicted interfaces that can be directly fed into the haddock docking software. The predicted interfaces are obtained by scanning public databases (uniprot and PDB70) for known complexes which are potentially homologous to the proteins represented by our query sequences.
+
+The pipeline consists of two scripts, startscript.py and runquery.py. In the first script, the architecture is dynamically created that allows the second script to efficiently and with minimal system resources run user-input queries. Ultimately a webserver, produced by Li, will handle incoming queries by making multiple calls to the runquery.py script and will refine the output to be sent back to the user or to Haddock.
+
+The startscript, as does the runquery script, takes command line arguments or a settings.config file to set all parameters, or will use the default settings listed below. According to these parameters, the script will where possible backup existing databases and download the latest versions. The databases are:
+-PDBallFASTA sequences - a database of all PDB protein sequences.
+(from ftp://ftp.wwpdb.org/pub/pdb/derived_data/)
+-PDB70HMMs - a database of Hidden Markov Models of 'non redundant' clusters of PDB sequences (all >70% sequence identity proteins are clustered).
+(from: http://wwwuser.gwdg.de/~compbiol/data/hhsuite/databases/hhsuite_dbs/pdb70_24Mar16.tgz)
+-UNIPROTHMMs - a database of Hidden Markov Models derived from the large public database UNIPROT.
+(from: http://wwwuser.gwdg.de/~compbiol/data/hhsuite/databases/hhsuite_dbs/uniprot20_2016_02.tgz
+dsspDB - a database of common structural elements that the HHpred software uses to predict homology.
+(from: rsync.cmbi.ru.nl/dssp)
+complexDB - a BLAST database provided by Li, containing fasta sequences of all PDB entries known to be in a complex (with known structure).
+(manually provided by Li, be careful to change the default parameter in the code if you change the names of the files in the DB)
+
+The startscript puts the databases in the right place, so that the runquery script can find them with default parameters (or custom locations can be provided through the settings.config/command line arguments). It then precomputes information that the runquery script will repeatedly make use of:
+all the 'representative' sequences in the PDB70HMMs database are BLASTed against the complexDB BLAST database.
+
+This design choice can be considered controversial, and is made for the following reasons: The 'non-redundant' PDB70HMMs database, provided by the authors of HHpred, does not report which sequences apart from its 'representative' sequence it represents! To retrieve which sequences, and thus which members of which complexes, a particular PDB70HMM model represents we BLAST each representative sequence against all PDB sequences in a known model. While doing this step in the startscript allows the runquery script to be much faster so that it does not BLAST the (almost-)same sequence many times, doing it this way means we can only BLAST the full 'representative' sequence. If we were to do it with repeated BLASTs in the runquery script, this would provide the advantage that we could BLAST only the aligned region of interest. For this reason, in the current approach we have to filter out non-overlapping alignments (or even alignments with to little overlap) in a later step.
+
+The BLAST output is filtered on a maximum E-value of 0.001 and a minimum sequence identity of 70% (mirroring the PDB70 'non-redundance' constraint). The XML output from BLAST is converted to a large folder structure called 'lookuptable', so that the runquery script can quickly retrieve individual results (hits). Hits with multiple BLAST hsp are filtered out.
+
+After running startscript.py, we are ready to start sending queries to
+runquery.py. This script takes input in the form of a folder location. Inside
+this folder, called the 'results folder' internally, the script expects to find
+2 files: a fasta file with the query sequence, and a settings.config file which
+may be empty or may contain specific parameters (such as HHblits thresholds and
+custom database locations). The runquery script will then:
+-run HHblits with the query sequence against the UNIPROT HMM database, producing a 'profile' or 'cluster' of similar sequences
+-convert this list of similar sequences to a proper HMM model
+-run a 'profile-profile' HHblits search with the resulting HMM model against all the HMM models in the PDB70HMM database
+-for each hit in the PDB70HMM database, amplify this hit by retrieving the BLAST hits of it's representative sequences.
+-the hard part: the script will align the original query sequence with each of the BLAST hits found in the previous step.
+
+The output of the script is thus a long list of alignments of the query sequence to the potentially homologous members of known complexes.
+
+The previous version of the PPI-HOM webserver, had a similar function, where a list of alignments was produced by a BLAST search: we now replace this step with the more sensitive HMM based profile-profile search method. Therefore, we can plug the results produced by the runquery script directly into that existing framework, so that the last steps (before the results are reported back to the user) can be completed by the webserver:
+-the runquery script is run over all query sequences.
+-we check if any of the produced results from different query sequences have a hit in the same complex but a different chain. if so:
+-if two of the query sequences each have a different potential homologue in the same known complex, calculate the interface residues in these homologues in the known complex (Angstrom cutoff).
+-use the alignment produced by the runquery script to predict corresponding residues in the query proteins.
+-output these corresponding residues as potential constraints in haddock format
+
+The following default parameters are (currently) used in the runquery script unless manually otherwise specified:
+-E-value cutoff for the HHpred search against UNIPROT: 0.0001
+-Number of iterations for HHpred search against UNIPROT: 1
+-Number of iterations for HHpred search against PDB70: 1
+-P-value cutoff for the HHpres search against PDB70: 40
+
+To use the script by submission to qsub:
+-for startscript (needs write permissions on mwalter, currently not fully portable yet):
+qsub -q long -F <any command line arguments> /home/mwalter/project/v0.0.02/projectfiles/CODE-PPI-HHPRED/startscript.py
+
+or when submitting from current directory /home/mwalter/project/v0.0.02/projectfiles/CODE-PPI-HHPRED without custom parameters, simply:
+qsub -q long startscript.py
+
+-for runquery:
+When you have write permissions, and are currently in /home/mwalter/project/v0.0.02/projectfiles/CODE-PPI-HHPRED, and you have made a folder in /home/mwalter/project/v0.0.02/projectfiles/results with inside it a file query1.fasta (with a single fasta query sequence) and a file settings.config (can be empty), then (say you named your folder 'YOURFOLDERNAME'):
+qsub -q short -F YOURFOLDERNAME runquery.py
+
+When however you do not have write permissions to the location of the source code, a custom location can be provided, currently by the following workaround (say the absolute path to your folder with the 2 files is '/home/mwalter/custom/location/YOURFOLDERNAME'):
+
+qsub -q short -F ../../../../../../../home/mwalter/custom/location/YOURFOLDERNAME /home/mwalter/project/v0.0.02/projectfiles/CODE-PPI-HHPRED/alignalignments.py
+
+Some final notes: we wish the code to be portable, but given delays in development we prioritized getting the pipeline up to start benchmarking and producing data. This will be made more elegant along the way. Also, a lot of quality control and deprecated functions are still in the code, while we may still bugfix and finetune the code if neccesairy. Finally, the code is organised in 5 files: the runquery script and the startscript, then for each a function library functionsstartscript.py and functionsrunquery.py, and finally a shared library of basic functions: functionsbasic.py
+
+The code makes use of the following software/dependencies:
+PSIPRED: /home/sbgrid/programs/x86_64-linux/psipred/3.2.1/
+DSSP: /home/sbgrid/programs/x86_64-linux/dssp/2.2.0/
+BLAST 2.2.26: /home/sbgrid/programs/x86_64-linux/blast/2.2.26/
+BLASTplus 2.3.0: /home/sbgrid/programs/x86_64-linux/blastplus/2.3.0/
+Biopython: /home/mwalter/modules/pythonmodules/lib64/python
+HH suite: /home/mwalter/hh/
+
+
+
